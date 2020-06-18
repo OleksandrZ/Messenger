@@ -11,18 +11,19 @@ using System.Threading.Tasks;
 
 namespace MessengerServer
 {
-    class Server
+    internal class Server
     {
-        Socket s = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.IP);
-        IPAddress ip = IPAddress.Parse("127.0.0.1");
-        IPEndPoint ep;
-        Dictionary<string, Socket> clients = new Dictionary<string, Socket>();
+        private Socket s = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.IP);
+        private IPAddress ip = IPAddress.Parse("127.0.0.1");
+        private IPEndPoint ep;
+        private Dictionary<string, Socket> clients = new Dictionary<string, Socket>();
+
         public Server()
         {
             ep = new IPEndPoint(ip, 10240);
             using (MessangerContext context = new MessangerContext())
             {
-                if(!context.Users.Any())
+                if (!context.Users.Any())
                 {
                     context.Users.Add(new User() { Name = "General Chat" });
                 }
@@ -42,7 +43,7 @@ namespace MessengerServer
                     byte[] buffer = new byte[1024];
                     int l = client.Receive(buffer);
                     string login = System.Text.Encoding.ASCII.GetString(buffer, 0, l);
-                    if(clients.ContainsKey(login) || login == "General Chat")
+                    if (clients.ContainsKey(login) || login == "General Chat")
                     {
                         client.Send(Encoding.Unicode.GetBytes("Such user already exists"));
                         Thread.Sleep(10);
@@ -66,7 +67,6 @@ namespace MessengerServer
                     }
                 }
             }
-
             catch (SocketException ex)
             {
                 Console.WriteLine(ex.Message);
@@ -115,7 +115,7 @@ namespace MessengerServer
                             messages.OrderBy(mess => mess.DateOfSendingMessage);
                         }
                         StringBuilder stringBuilder = new StringBuilder();
-                        if(messages.Count < 1)
+                        if (messages.Count < 1)
                         {
                             stringBuilder.Append("No messages");
                         }
@@ -158,7 +158,7 @@ namespace MessengerServer
                                 Thread.Sleep(50);
                                 l = sock.Receive(buffer);
                                 msg = Encoding.Unicode.GetString(buffer);
-                                if(msg == receiver)
+                                if (msg == receiver)
                                 {
                                     sock.Send(Encoding.Unicode.GetBytes($"{message.Sender.Name}: {message.MessageContent}; {message.DateOfSendingMessage.ToString()}"));
                                 }
@@ -175,7 +175,7 @@ namespace MessengerServer
                         {
                             foreach (var item in clients.Keys)
                             {
-                                if(item == receiver)
+                                if (item == receiver)
                                 {
                                     clients[item].Send(Encoding.Unicode.GetBytes("$7$%"));
                                     Thread.Sleep(50);
@@ -194,10 +194,8 @@ namespace MessengerServer
                                     break;
                                 }
                             }
-                           
                         }
                     }
-                    
                 }
                 catch (SocketException)
                 {
@@ -217,7 +215,6 @@ namespace MessengerServer
                     Console.WriteLine(ex.Message);
                 }
             } while (true);
-            
         }
 
         public void Stop()
