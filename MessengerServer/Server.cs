@@ -78,21 +78,6 @@ namespace MessengerServer
             byte[] buffer = new byte[1024];
             int l;
             string login = clients.Where((x) => x.Value == socket).First().Key;
-            foreach (var log in clients.Keys)
-            {
-                socket.Send(System.Text.Encoding.Unicode.GetBytes("$123$%"));
-                Thread.Sleep(50);
-                socket.Send(System.Text.Encoding.Unicode.GetBytes(log));
-            }
-            foreach (var sock in clients.Values)
-            {
-                if (sock != socket)
-                {
-                    sock.Send(System.Text.Encoding.Unicode.GetBytes("$123$%"));
-                    Thread.Sleep(50);
-                    sock.Send(System.Text.Encoding.Unicode.GetBytes(login));
-                }
-            }
             do
             {
                 try
@@ -100,7 +85,18 @@ namespace MessengerServer
                     l = socket.Receive(buffer);
                     string msg = System.Text.Encoding.Unicode.GetString(buffer, 0, l);
                     login = clients.Where((x) => x.Value == socket).First().Key;
-                    string receiver;
+
+                    string[] msgs = msg.Split('^');
+                    string receiver = msgs[0];
+                    string messageContent = msgs[1];
+                    DateTime date = new DateTime(long.Parse(msgs[2]));
+
+                    foreach (var sock in clients.Values)
+                    {
+                        sock.Send(Encoding.Unicode.GetBytes($"{receiver}^{login}^{messageContent}^{date.ToString()}"));
+                    }
+                }
+                /*    string receiver;
                     string messageContent;
                     if (msg == "$456$%")
                     {
@@ -196,7 +192,7 @@ namespace MessengerServer
                             }
                         }
                     }
-                }
+                }*/
                 catch (SocketException)
                 {
                     login = clients.Where((x) => x.Value == socket).First().Key;

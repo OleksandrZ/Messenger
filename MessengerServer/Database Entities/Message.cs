@@ -12,6 +12,5 @@ namespace MessengerServer.Database_Entities
         public User Receiver { get; set; }
         public string MessageContent { get; set; }
         public DateTime DateOfSendingMessage { get; set; }
-        public bool IsDelivered { get; set; }
     }
 }
