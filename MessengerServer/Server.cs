@@ -78,6 +78,29 @@ namespace MessengerServer
             byte[] buffer = new byte[1024];
             int l;
             string login = clients.Where((x) => x.Value == socket).First().Key;
+
+            StringBuilder stringBuilder = new StringBuilder();
+            stringBuilder.Append("$123$%^");
+            foreach (var item in clients.Keys)
+            {
+                if(item != login)
+                {
+                    stringBuilder.Append(item + "^");
+                }
+            }
+            stringBuilder.Remove(stringBuilder.Length - 1, 1);
+
+            foreach (var sock in clients.Values)
+            {
+                if(sock != socket)
+                {
+                    sock.Send(Encoding.Unicode.GetBytes("$123$%^" + login));
+                }
+                else
+                {
+                    sock.Send(Encoding.Unicode.GetBytes(stringBuilder.ToString()));
+                }
+            }
             do
             {
                 try
@@ -200,9 +223,8 @@ namespace MessengerServer
                     Console.WriteLine("User " + login + " disconnected");
                     foreach (var sock in clients.Values)
                     {
-                        sock.Send(System.Text.Encoding.Unicode.GetBytes("$321$%"));
+                        sock.Send(System.Text.Encoding.Unicode.GetBytes("$321$%^" + login));
                         Thread.Sleep(50);
-                        sock.Send(System.Text.Encoding.Unicode.GetBytes(login));
                     }
                     return;
                 }
