@@ -16,6 +16,8 @@ namespace MessengerServer
         private Socket s = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.IP);
         private IPAddress ip = IPAddress.Parse("127.0.0.1");
         private IPEndPoint ep;
+
+        //Словарь пользователей подключенных в данный момент
         private Dictionary<string, Socket> clients = new Dictionary<string, Socket>();
 
         public Server()
@@ -23,9 +25,10 @@ namespace MessengerServer
             ep = new IPEndPoint(ip, 10240);
             using (MessangerContext context = new MessangerContext())
             {
-                if (!context.Users.Any())
+                if (!context.Users.Where(user => user.Name == "General Chat").Any())
                 {
                     context.Users.Add(new User() { Name = "General Chat" });
+                    context.SaveChanges();
                 }
             }
         }
@@ -75,7 +78,7 @@ namespace MessengerServer
 
         private void ReceiveMessage(Socket socket)
         {
-            byte[] buffer = new byte[1024];
+            byte[] buffer = new byte[5000];
             int l;
             string login = clients.Where((x) => x.Value == socket).First().Key;
 
@@ -83,7 +86,7 @@ namespace MessengerServer
             stringBuilder.Append("$123$%^");
             foreach (var item in clients.Keys)
             {
-                if(item != login)
+                if (item != login)
                 {
                     stringBuilder.Append(item + "^");
                 }
@@ -92,7 +95,7 @@ namespace MessengerServer
 
             foreach (var sock in clients.Values)
             {
-                if(sock != socket)
+                if (sock != socket)
                 {
                     sock.Send(Encoding.Unicode.GetBytes("$123$%^" + login));
                 }
@@ -109,31 +112,34 @@ namespace MessengerServer
                     string msg = System.Text.Encoding.Unicode.GetString(buffer, 0, l);
                     login = clients.Where((x) => x.Value == socket).First().Key;
 
-                    string[] msgs = msg.Split('^');
-                    string receiver = msgs[0];
-                    string messageContent = msgs[1];
-                    DateTime date = new DateTime(long.Parse(msgs[2]));
-
-                    foreach (var sock in clients.Values)
+                    if (msg.StartsWith("$456$%"))
                     {
-                        sock.Send(Encoding.Unicode.GetBytes($"{receiver}^{login}^{messageContent}^{date.ToString()}"));
-                    }
-                }
-                /*    string receiver;
-                    string messageContent;
-                    if (msg == "$456$%")
-                    {
-                        l = socket.Receive(buffer);
-                        receiver = System.Text.Encoding.Unicode.GetString(buffer, 0, l);
+                        string[] msgs = msg.Split('^');
                         List<Message> messages;
+                        string receiver = msgs[1];
                         using (MessangerContext context = new MessangerContext())
                         {
-                            messages = context.Messages.Include(user => user.Receiver).Include(user => user.Sender).Where(mess => mess.Sender.Name == login).Where(mess => mess.Receiver.Name == receiver).ToList();
-                            var receivedMessages = context.Messages.Where(mess => mess.Sender.Name == receiver).Where(mess => mess.Receiver.Name == login).ToList();
-                            messages.AddRange(receivedMessages);
-                            messages.OrderBy(mess => mess.DateOfSendingMessage);
+                            if (receiver == "General Chat")
+                            {
+                                messages = context.Messages.Include(user => user.Receiver).Include(user => user.Sender).Where(mess => mess.Receiver.Name == receiver).ToList();
+                            }
+                            else
+                            {
+                                messages = context.Messages.Include(user => user.Receiver).Include(user => user.Sender).Where(mess => mess.Sender.Name == login).Where(mess => mess.Receiver.Name == receiver).ToList();
+                                var receivedMessages = context.Messages.Include(user => user.Receiver).Include(user => user.Sender).Where(mess => mess.Sender.Name == receiver).Where(mess => mess.Receiver.Name == login).ToList();
+                                messages.AddRange(receivedMessages);
+                            }
                         }
-                        StringBuilder stringBuilder = new StringBuilder();
+                        /*
+                        ToList нужен для корректной сортировке, без него сортирует, но только в формате
+                        Sender1 14:36
+                        Sender1 14:46
+                        Sender2 14:35
+                        Sender2 14:37
+                        */
+                        messages = messages.OrderBy(mess => mess.DateOfSendingMessage).ToList();
+                        stringBuilder = new StringBuilder();
+                        stringBuilder.Append("$456$%^");
                         if (messages.Count < 1)
                         {
                             stringBuilder.Append("No messages");
@@ -142,51 +148,38 @@ namespace MessengerServer
                         {
                             foreach (var message in messages)
                             {
-                                stringBuilder.Append($"{message.Sender.Name}: {message.MessageContent}; {message.DateOfSendingMessage.ToString()}^");
-                                message.IsDelivered = true;
+                                stringBuilder.Append($"{message.Sender.Name}: {message.MessageContent} ({message.DateOfSendingMessage.ToString()})^");
                             }
+                            stringBuilder.Remove(stringBuilder.Length - 1, 1);
                         }
                         socket.Send(Encoding.Unicode.GetBytes(stringBuilder.ToString()));
-                        using (MessangerContext context = new MessangerContext())
-                        {
-                            context.SaveChanges();
-                        }
                     }
                     else
                     {
-                        string[] msgs = msg.Split('$');
-                        receiver = msgs[0];
-                        messageContent = msgs[1];
-                        long date = long.Parse(msgs[2]);
+                        string[] msgs = msg.Split('^');
+                        string receiver = msgs[0];
+                        string messageContent = msgs[1];
+                        DateTime date = new DateTime(long.Parse(msgs[2]));
+
                         Message message = new Message();
                         using (MessangerContext context = new MessangerContext())
                         {
                             message.Receiver = context.Users.Where(user => user.Name == receiver).First();
                             message.Sender = context.Users.Where(user => user.Name == login).First();
-                            message.IsDelivered = true;
                             message.MessageContent = messageContent;
-                            message.DateOfSendingMessage = new DateTime(date);
+                            message.DateOfSendingMessage = date;
                             context.Messages.Add(message);
                             context.SaveChanges();
                         }
+
                         if (receiver == "General Chat")
                         {
+                            Console.WriteLine(receiver);
                             foreach (var sock in clients.Values)
                             {
-                                sock.Send(Encoding.Unicode.GetBytes("$7$%"));
-                                Thread.Sleep(50);
-                                l = sock.Receive(buffer);
-                                msg = Encoding.Unicode.GetString(buffer);
-                                if (msg == receiver)
+                                if (socket != sock)
                                 {
-                                    sock.Send(Encoding.Unicode.GetBytes($"{message.Sender.Name}: {message.MessageContent}; {message.DateOfSendingMessage.ToString()}"));
-                                }
-                                else
-                                {
-                                    sock.Send(Encoding.Unicode.GetBytes("$213$%"));
-                                    Thread.Sleep(50);
-                                    sock.Send(Encoding.Unicode.GetBytes(receiver));
-                                    Thread.Sleep(50);
+                                    sock.Send(Encoding.Unicode.GetBytes($"{receiver}^{login}^{messageContent}^{date.ToString()}"));
                                 }
                             }
                         }
@@ -196,26 +189,13 @@ namespace MessengerServer
                             {
                                 if (item == receiver)
                                 {
-                                    clients[item].Send(Encoding.Unicode.GetBytes("$7$%"));
-                                    Thread.Sleep(50);
-                                    l = clients[item].Receive(buffer);
-                                    msg = Encoding.Unicode.GetString(buffer);
-                                    if (msg == receiver)
-                                    {
-                                        clients[item].Send(Encoding.Unicode.GetBytes($"{message.Sender.Name}: {message.MessageContent}; {message.DateOfSendingMessage.ToString()}"));
-                                    }
-                                    else
-                                    {
-                                        clients[item].Send(Encoding.Unicode.GetBytes("$213$%"));
-                                        Thread.Sleep(50);
-                                        clients[item].Send(Encoding.Unicode.GetBytes(receiver));
-                                    }
+                                    clients[item].Send(Encoding.Unicode.GetBytes($"{login}^{receiver}^{messageContent}^{date.ToString()}"));
                                     break;
                                 }
                             }
                         }
                     }
-                }*/
+                }
                 catch (SocketException)
                 {
                     login = clients.Where((x) => x.Value == socket).First().Key;
@@ -233,10 +213,6 @@ namespace MessengerServer
                     Console.WriteLine(ex.Message);
                 }
             } while (true);
-        }
-
-        public void Stop()
-        {
         }
     }
 }
